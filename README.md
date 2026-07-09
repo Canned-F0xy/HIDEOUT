@@ -1,25 +1,26 @@
 # 🦊 HIDEOUT (e621 Android Client)
 
-![Version](https://img.shields.io/badge/Version-2026--07--07_A2-FF6B00?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-2026--07--09-FF6B00?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-GPL_3.0-blue?style=for-the-badge)
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Compose-4285F4?style=for-the-badge&logo=android&logoColor=white)
 ![WireGuard](https://img.shields.io/badge/WireGuard-881798?style=for-the-badge&logo=wireguard&logoColor=white)
-![Downloads](https://img.shields.io/github/downloads/Canned-F0xy/HIDEOUT/total.svg?style=for-the-badge&color=yellow)
-
+![Downloads](https://img.shields.io/github/downloads/Canned-F0xy/HIDEOUT/total.svg?style=for-the-badge&color=yellow&label=다운로드)
 
 **HIDEOUT**은 제약 없이 안전하게 e621을 탐색할 수 있도록 설계된 안드로이드 전용 클라이언트 앱입니다.
 
-Jetpack Compose 기반의 수려한 UI와 더불어, **WireGuard VPN 터널링 기능**과 **Cloudflare 403 캡차 우회 기능**을 앱 내부에 완벽하게 내장하여 국가 차단 및 봇 방어막을 자체적으로 돌파합니다.
+Jetpack Compose 기반의 수려한 UI와 더불어, 강력한 **내장 VPN 터널링 기능(Mullvad & WireGuard)**과 **Cloudflare 403 캡차 우회 기능**을 앱 내부에 완벽하게 탑재하여 국가 차단 및 봇 방어막을 자체적으로 돌파합니다.
 
 **HIDEOUT** is a dedicated Android client app designed to securely explore e621 without restrictions.
 
-Along with a sleek UI based on Jetpack Compose, it completely integrates **WireGuard VPN tunneling** and **Cloudflare 403 Captcha bypass** directly into the app, breaking through regional blocks and bot defenses on its own.
+Along with a sleek UI based on Jetpack Compose, it completely integrates a **built-in VPN tunneling feature (Mullvad & WireGuard)** and **Cloudflare 403 Captcha bypass** directly into the app, breaking through regional blocks and bot defenses on its own.
 
 ## 주요 기능 (Key Features)
 
-* **인앱 WireGuard VPN:** 외부 VPN 앱 없이, `.conf` 파일 하나만 등록하면 앱 자체적으로 암호화 우회 터널을 생성합니다.
+* **강력한 인앱 자체 VPN:** 외부 VPN 앱을 켤 필요 없이 앱 내부에서 암호화 우회 터널을 생성합니다.
+  * **Mullvad VPN 자동 연결:** Mullvad 유료 계정(16자리 숫자)을 입력하면 API를 통해 즉시 일본(JP) 서버로 자동 연결됩니다.
+  * **WireGuard `.conf` 업로드:** Proton VPN 등에서 발급한 개인 .conf 파일을 등록하는 방식도 완벽히 지원합니다.
 
 * **Cloudflare 403 완벽 우회:** 403 차단 감지 시 내장 브라우저 팝업을 통해 캡차를 풀고, 쿠키(`cf_clearance`)를 가로채어 앱 내 모든 통신 및 다운로드에 적용합니다.
 
@@ -31,8 +32,11 @@ Along with a sleek UI based on Jetpack Compose, it completely integrates **WireG
 
 * **맞춤형 필터링:** R-18 모드 온/오프 및 개인화된 블랙리스트(기피 태그) 차단 기능을 제공합니다.
 
-  
-* **In-App WireGuard VPN:** Generates an encrypted bypass tunnel on its own by simply registering a single `.conf` file, without needing any external VPN apps.
+<!-- -->
+
+* **Powerful In-App VPN:** Generates an encrypted bypass tunnel directly within the app without needing external VPN apps.
+  * **Mullvad VPN Auto Connect:** Enter your 16-digit Mullvad paid account number to automatically connect to a Japan (JP) server via API.
+  * **WireGuard `.conf` Upload:** Fully supports uploading personal config files extracted from services like Proton VPN.
   
 * **Seamless Cloudflare 403 Bypass:** When a 403 block is detected, it resolves the captcha via a built-in browser popup, intercepts the cookie (`cf_clearance`), and automatically applies it to all network requests and downloads within the app.
   
@@ -50,16 +54,18 @@ Along with a sleek UI based on Jetpack Compose, it completely integrates **WireG
 * **Network:** Retrofit2, OkHttp3, Coil (GIF/WebP support)
 * **Media:** AndroidX Media3 (ExoPlayer)
 * **Security:** EncryptedSharedPreferences
-* **VPN Core:** `wireguard-android` (wireguard-go JNI wrapper), Android VpnService
+* **VPN Core:** `wireguard-android` (wireguard-go JNI wrapper), Android VpnService, Mullvad API
 
 ## 설치 및 사용 방법 (How to Use)
 
 1. Release 탭에서 최신 버전의 `.apk` 파일을 다운로드하여 안드로이드 기기에 설치합니다.
 
-2. 앱 실행 후 초기 화면에서 본인의 **WireGuard 설정 파일(`.conf`)** 을 선택하여 등록합니다.
-*(이미 1.1.1.1 등 외부 VPN을 사용 중이라면 '설정 안함'을 눌러 통과할 수 있습니다.)*
+2. 앱 첫 실행 시 나타나는 초기 화면에서 원하는 우회 방식을 선택합니다.
+   * **Mullvad VPN:** 결제된 16자리 계정 번호를 입력하여 간편하게 연결합니다.
+   * **WireGuard conf:** 본인의 설정 파일(`.conf`)을 선택하여 등록합니다.
+   *(이미 Proton VPN 등 외부 VPN을 사용 중이라면 '설정 안함'을 눌러 통과할 수 있습니다.)*
 
-3. '터널 활성화' 버튼을 눌러 우회 터널을 뚫고 앱을 사용합니다.
+3. '연결하기' 또는 '터널 활성화' 버튼을 눌러 우회 터널을 뚫고 앱을 사용합니다. 상단 바 메뉴를 통해 언제든 **VPN 설정 / VPN 해제**가 가능합니다.
 
 4. **e621 로그인:** 원활한 사용을 위해 좌측 상단 메뉴 -> `계정 로그인`에서 e621 Username과 API Key를 입력하는 것을 권장합니다.
 
@@ -67,10 +73,12 @@ Along with a sleek UI based on Jetpack Compose, it completely integrates **WireG
 
 1. Download the latest `.apk` file from the Release tab and install it on your Android device.
    
-2. Launch the app and select your **WireGuard configuration file (`.conf`)** to register it on the initial screen.
-*(If you are already using an external VPN like 1.1.1.1, you can bypass this step by tapping 'Skip / Do not set'.)*
+2. Launch the app and select your preferred VPN bypass method on the initial setup screen:
+   * **Mullvad VPN:** Enter your valid 16-digit paid account number for a quick connection.
+   * **WireGuard conf:** Register your own configuration file (`.conf`).
+   *(If you are already using an external VPN like Proton VPN, you can bypass this step by tapping 'Skip Setup'.)*
    
-3. Tap the 'Enable Tunnel' button to establish the bypass connection and start using the app.
+3. Tap 'Connect' or 'Enable Tunnel' to establish the bypass connection and start using the app. You can easily **Enable VPN / Disable VPN** anytime via the top bar menu.
    
 4. **e621 Login:** For seamless usage, it is highly recommended to enter your e621 Username and API Key via the top-left menu -> `Account Login`.
 
@@ -82,7 +90,8 @@ Along with a sleek UI based on Jetpack Compose, it completely integrates **WireG
 
 * 거주 국가의 법률을 준수하여 사용하시기 바랍니다.
 
-  
+<!-- -->
+
 * This app is a third-party client utilizing the e621.net API and is not an official app.
   
 * Users are solely responsible for any content accessed through this app. The developer assumes no legal liability for the content viewed or downloaded.
