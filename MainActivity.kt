@@ -90,6 +90,7 @@ import coil.request.ImageRequest
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
 import com.wireguard.config.Config
+import com.wireguard.crypto.KeyPair
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -206,11 +207,16 @@ interface AppStrings {
     val cdDownload: String
     val cdFullscreen: String
     fun idLabel(id: Int): String
+    val setupMullvad: String
+    val setupWireguard: String
+    val mullvadHint: String
+    val connectLabel: String
+    val loginFailedMullvad: String
 }
 
 object KoStrings : AppStrings {
     override val hideoutSetup = "여우굴 파기"
-    override val vpnWarning = "대한민국 IP는 대한민국 법적 법령으로 인하여\ne621 접속을 위해 WireGuard (.conf) 파일이 필요합니다.\n외부 VPN 사용 시 '설정 안함'을 눌러주세요."
+    override val vpnWarning = "대한민국 IP는 대한민국 법적 법령으로 인하여\ne621 접속을 위해 VPN 초기설정이 필요합니다.\n외부 VPN 사용 시 '설정 안함'을 눌러주세요."
     override val selectConfig = "설정 파일 선택"
     override val changeConfig = "설정 파일 변경"
     override val enableTunnel = "터널 활성화"
@@ -251,8 +257,8 @@ object KoStrings : AppStrings {
     override val r18ModeOn = "R-18 모드: ON"
     override val r18ModeOff = "R-18 모드: OFF"
     override val appSettingsMenu = "앱 설정 (저장경로 / 테마)"
-    override val disableWireGuard = "WireGuard 해제"
-    override val enableWireGuard = "WireGuard 설정"
+    override val disableWireGuard = "VPN 해제"
+    override val enableWireGuard = "VPN 설정"
     override val searchTags = "태그 검색"
     override val latestPosts = "✨ 최신 포스트"
     override fun searchResults(tag: String) = "🔍 검색 결과: $tag"
@@ -296,11 +302,16 @@ object KoStrings : AppStrings {
     override val cdDownload = "다운로드"
     override val cdFullscreen = "전체화면"
     override fun idLabel(id: Int) = "ID: $id"
+    override val setupMullvad = "Mullvad VPN 자동 연결"
+    override val setupWireguard = "WireGuard conf 파일 업로드"
+    override val mullvadHint = "Mullvad 16자리 계정 번호"
+    override val connectLabel = "연결하기"
+    override val loginFailedMullvad = "인증 실패: 번호나 기기 제한(5대)을 확인하세요."
 }
 
 object EnStrings : AppStrings {
     override val hideoutSetup = "HIDEOUT Setup"
-    override val vpnWarning = "Due to South Korean legal regulations,\na WireGuard (.conf) file is required to access e621 from a KR IP.\nIf using an external VPN, please tap 'Skip Setup'."
+    override val vpnWarning = "Due to South Korean legal regulations,\na VPN initial setup is required to access e621.\nIf using an external VPN, please tap 'Skip Setup'."
     override val selectConfig = "Select Config File"
     override val changeConfig = "Change Config File"
     override val enableTunnel = "Enable Tunnel"
@@ -341,8 +352,8 @@ object EnStrings : AppStrings {
     override val r18ModeOn = "R-18 Mode: ON"
     override val r18ModeOff = "R-18 Mode: OFF"
     override val appSettingsMenu = "App Settings (Path / Theme)"
-    override val disableWireGuard = "Disable WireGuard"
-    override val enableWireGuard = "Enable WireGuard"
+    override val disableWireGuard = "Disable VPN"
+    override val enableWireGuard = "Enable VPN"
     override val searchTags = "Search Tags"
     override val latestPosts = "✨ Latest Posts"
     override fun searchResults(tag: String) = "🔍 Search Results: $tag"
@@ -386,6 +397,11 @@ object EnStrings : AppStrings {
     override val cdDownload = "Download"
     override val cdFullscreen = "Fullscreen"
     override fun idLabel(id: Int) = "ID: $id"
+    override val setupMullvad = "Mullvad VPN Auto Connect"
+    override val setupWireguard = "WireGuard conf File Upload"
+    override val mullvadHint = "Mullvad 16-digit Account Number"
+    override val connectLabel = "Connect"
+    override val loginFailedMullvad = "Auth failed: Check account or device limit (max 5)."
 }
 
 val LocalStrings = staticCompositionLocalOf<AppStrings> { KoStrings }
@@ -438,6 +454,67 @@ class VpnCleanupService : Service() {
     }
 }
 
+suspend fun autoConnectMullvad(
+    accountNumber: String,
+    context: Context,
+    prefs: android.content.SharedPreferences,
+    encryptedPrefs: android.content.SharedPreferences
+): Boolean {
+    return withContext(Dispatchers.IO) {
+        try {
+            var privKey = encryptedPrefs.getString("mullvad_priv_key", null)
+            var pubKey = encryptedPrefs.getString("mullvad_pub_key", null)
+
+            if (privKey == null || pubKey == null) {
+                val keyPair = KeyPair()
+                privKey = keyPair.privateKey.toBase64()
+                pubKey = keyPair.publicKey.toBase64()
+                encryptedPrefs.edit()
+                    .putString("mullvad_priv_key", privKey)
+                    .putString("mullvad_pub_key", pubKey)
+                    .apply()
+            }
+
+            val cleanAccount = accountNumber.replace(Regex("[^0-9]"), "")
+            val ipResponse = MullvadNetwork.api.registerKey(cleanAccount, pubKey!!)
+
+            if (!ipResponse.isSuccessful) return@withContext false
+
+            val tunnelAddresses = ipResponse.body()?.string()?.trim() ?: ""
+            if (tunnelAddresses.isEmpty()) return@withContext false
+
+            val relays = MullvadNetwork.api.getRelays()
+            val targetServer = relays.firstOrNull { it.country_code == "jp" && it.active }
+                ?: relays.first { it.active }
+
+            val configText = """
+                [Interface]
+                PrivateKey = $privKey
+                Address = $tunnelAddresses
+                DNS = 10.64.0.1
+                
+                [Peer]
+                PublicKey = ${targetServer.pubkey}
+                Endpoint = ${targetServer.ipv4_addr_in}:51820
+                AllowedIPs = 0.0.0.0/0
+            """.trimIndent()
+
+            prefs.edit().putString("vpnConfigText", configText).apply()
+
+            val config = Config.parse(configText.byteInputStream(Charsets.UTF_8))
+            val backend = VpnManager.getBackend(context)
+
+            backend.setState(VpnManager.tunnel, Tunnel.State.UP, config)
+            context.startService(Intent(context, VpnCleanupService::class.java))
+
+            return@withContext true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext false
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
 
     @OptIn(DelicateCoroutinesApi::class)
@@ -464,19 +541,21 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalStrings provides currentStrings) {
                 MaterialTheme(colorScheme = if (isDarkTheme) HideoutDarkTheme else HideoutLightTheme) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        MainApp(
-                            prefs = prefs, encryptedPrefs = encryptedPrefs,
-                            isDarkTheme = isDarkTheme,
-                            onThemeToggle = {
-                                isDarkTheme = !isDarkTheme
-                                prefs.edit().putBoolean("isDarkTheme", isDarkTheme).apply()
-                            },
-                            appLanguage = appLanguage,
-                            onLanguageChange = { newLang ->
-                                appLanguage = newLang
-                                prefs.edit().putString("appLanguage", newLang).apply()
-                            }
-                        )
+                        Box(modifier = Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+                            MainApp(
+                                prefs = prefs, encryptedPrefs = encryptedPrefs,
+                                isDarkTheme = isDarkTheme,
+                                onThemeToggle = {
+                                    isDarkTheme = !isDarkTheme
+                                    prefs.edit().putBoolean("isDarkTheme", isDarkTheme).apply()
+                                },
+                                appLanguage = appLanguage,
+                                onLanguageChange = { newLang ->
+                                    appLanguage = newLang
+                                    prefs.edit().putString("appLanguage", newLang).apply()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -519,6 +598,9 @@ fun MainApp(
     var vpnConfig by remember { mutableStateOf<Config?>(null) }
     var vpnErrorMessage by remember { mutableStateOf<String?>(null) }
     var isVpnBypassed by remember { mutableStateOf(prefs.getBoolean("isVpnBypassed", false)) }
+
+    var setupMode by remember { mutableStateOf<String?>(null) }
+    var mullvadAccountInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         NetworkModule.onCloudflareChallenge = {
@@ -658,15 +740,28 @@ fun MainApp(
 
     val vpnPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            vpnConfig?.let { config ->
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        backend.setState(tunnel, Tunnel.State.UP, config)
-                        context.startService(Intent(context, VpnCleanupService::class.java))
-                    } catch (e: Exception) {}
+            if (setupMode == "MULLVAD") {
+                scope.launch {
+                    vpnErrorMessage = null
+                    val success = autoConnectMullvad(mullvadAccountInput, context, prefs, encryptedPrefs)
+                    if (success) {
+                        isVpnBypassed = true
+                        prefs.edit().putBoolean("isVpnBypassed", true).apply()
+                    } else {
+                        vpnErrorMessage = strings.loginFailedMullvad
+                    }
                 }
-                isVpnBypassed = true
-                prefs.edit().putBoolean("isVpnBypassed", true).apply()
+            } else {
+                vpnConfig?.let { config ->
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            backend.setState(tunnel, Tunnel.State.UP, config)
+                            context.startService(Intent(context, VpnCleanupService::class.java))
+                        } catch (e: Exception) {}
+                    }
+                    isVpnBypassed = true
+                    prefs.edit().putBoolean("isVpnBypassed", true).apply()
+                }
             }
         }
     }
@@ -698,39 +793,93 @@ fun MainApp(
 
                 Text(strings.vpnWarning, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 12.dp))
 
-                if (vpnErrorMessage != null) Text(vpnErrorMessage!!, color = Color.Red, modifier = Modifier.padding(bottom = 12.dp))
+                if (setupMode == null) {
+                    Button(
+                        onClick = { setupMode = "MULLVAD" },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) { Text(strings.setupMullvad, color = NeonOrange) }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { filePickerLauncher.launch("*/*") }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Text(if (vpnConfig == null) strings.selectConfig else strings.changeConfig, color = NeonOrange)
-                    }
-                    if (vpnConfig != null) {
-                        Button(
-                            onClick = {
-                                val intent = VpnService.prepare(context)
-                                if (intent != null) vpnPermissionLauncher.launch(intent)
-                                else {
-                                    scope.launch(Dispatchers.IO) {
-                                        backend.setState(tunnel, Tunnel.State.UP, vpnConfig)
-                                        context.startService(Intent(context, VpnCleanupService::class.java))
+                    Button(
+                        onClick = { setupMode = "WIREGUARD" },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) { Text(strings.setupWireguard, color = NeonOrange) }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            isVpnBypassed = true
+                            prefs.edit().putBoolean("isVpnBypassed", true).apply()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurface, contentColor = Color.Red)
+                    ) { Text(strings.skipSetup, fontWeight = FontWeight.Bold) }
+                } else if (setupMode == "WIREGUARD") {
+                    if (vpnErrorMessage != null) Text(vpnErrorMessage!!, color = Color.Red, modifier = Modifier.padding(bottom = 12.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { filePickerLauncher.launch("*/*") }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                            Text(if (vpnConfig == null) strings.selectConfig else strings.changeConfig, color = NeonOrange)
+                        }
+                        if (vpnConfig != null) {
+                            Button(
+                                onClick = {
+                                    val intent = VpnService.prepare(context)
+                                    if (intent != null) vpnPermissionLauncher.launch(intent)
+                                    else {
+                                        scope.launch(Dispatchers.IO) {
+                                            backend.setState(tunnel, Tunnel.State.UP, vpnConfig)
+                                            context.startService(Intent(context, VpnCleanupService::class.java))
+                                        }
+                                        isVpnBypassed = true
+                                        prefs.edit().putBoolean("isVpnBypassed", true).apply()
                                     }
-                                    isVpnBypassed = true
-                                    prefs.edit().putBoolean("isVpnBypassed", true).apply()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = NeonOrange)
+                            ) { Text(strings.enableTunnel, color = DeepBlack, fontWeight = FontWeight.Bold) }
+                        }
+                    }
+                    TextButton(onClick = { setupMode = null }, modifier = Modifier.padding(top = 16.dp)) {
+                        Text(strings.cdBack, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else if (setupMode == "MULLVAD") {
+                    if (vpnErrorMessage != null) Text(vpnErrorMessage!!, color = Color.Red, modifier = Modifier.padding(bottom = 12.dp))
+
+                    OutlinedTextField(
+                        value = mullvadAccountInput,
+                        onValueChange = { mullvadAccountInput = it },
+                        label = { Text(strings.mullvadHint) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            val intent = VpnService.prepare(context)
+                            if (intent != null) vpnPermissionLauncher.launch(intent)
+                            else {
+                                scope.launch {
+                                    vpnErrorMessage = null
+                                    val success = autoConnectMullvad(mullvadAccountInput, context, prefs, encryptedPrefs)
+                                    if (success) {
+                                        isVpnBypassed = true
+                                        prefs.edit().putBoolean("isVpnBypassed", true).apply()
+                                    } else {
+                                        vpnErrorMessage = strings.loginFailedMullvad
+                                    }
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = NeonOrange)
-                        ) { Text(strings.enableTunnel, color = DeepBlack, fontWeight = FontWeight.Bold) }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonOrange),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+                    ) { Text(strings.connectLabel, color = DeepBlack, fontWeight = FontWeight.Bold) }
+
+                    TextButton(onClick = { setupMode = null }, modifier = Modifier.padding(top = 16.dp)) {
+                        Text(strings.cdBack, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = {
-                        isVpnBypassed = true
-                        prefs.edit().putBoolean("isVpnBypassed", true).apply()
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurface, contentColor = Color.Red)
-                ) { Text(strings.skipSetup, fontWeight = FontWeight.Bold) }
             }
         }
     } else {
@@ -865,7 +1014,7 @@ fun CloudflareBypassDialog(onSuccess: (String) -> Unit, onCancel: () -> Unit) {
 
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
-            modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f).padding(16.dp),
+            modifier = Modifier.fillMaxWidth(0.9f).fillMaxHeight(0.8f).systemBarsPadding().imePadding().padding(16.dp),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
         ) {
@@ -1089,7 +1238,7 @@ fun GalleryScreen(
                     Image(painter = painterResource(id = R.drawable.ic_launcher2), contentDescription = strings.cdLogo, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("HIDEOUT", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp), color = NeonOrange)
-                    Text("Ver. 2026-07-07", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Ver. 2026-07-09", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1333,7 +1482,7 @@ fun DetailScreen(post: Post, isActivePage: Boolean, prefs: android.content.Share
                     if (exoPlayer != null) {
                         VideoPlayer(exoPlayer = exoPlayer)
                     }
-                    IconButton(onClick = { isFullScreen = false }, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                    IconButton(onClick = { isFullScreen = false }, modifier = Modifier.align(Alignment.TopEnd).systemBarsPadding().padding(16.dp)) {
                         Icon(Icons.Default.Close, contentDescription = strings.cdClose, tint = Color.White)
                     }
                 }
@@ -1458,7 +1607,7 @@ fun ZoomableImage(imageUrl: String, imageLoader: ImageLoader, onClose: () -> Uni
             }
     ) {
         AsyncImage(model = imageUrl, imageLoader = imageLoader, contentDescription = "Zoomable Image", modifier = Modifier.fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y), contentScale = ContentScale.Fit)
-        IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)) { Icon(Icons.Default.Close, contentDescription = strings.cdClose, tint = Color.White) }
+        IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).systemBarsPadding().padding(16.dp)) { Icon(Icons.Default.Close, contentDescription = strings.cdClose, tint = Color.White) }
     }
 }
 
