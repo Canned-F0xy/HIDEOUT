@@ -6,7 +6,7 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Compose-4285F4?style=for-the-badge&logo=android&logoColor=white)
 ![WireGuard](https://img.shields.io/badge/WireGuard-881798?style=for-the-badge&logo=wireguard&logoColor=white)
-![Downloads](https://img.shields.io/github/downloads/Canned-F0xy/HIDEOUT/total.svg?style=for-the-badge&color=blue)
+![Downloads](https://img.shields.io/github/downloads/Canned-F0xy/HIDEOUT/total.svg?style=for-the-badge&color=yellow)
 
 
 **HIDEOUT**은 제약 없이 안전하게 e621을 탐색할 수 있도록 설계된 안드로이드 전용 클라이언트 앱입니다.
