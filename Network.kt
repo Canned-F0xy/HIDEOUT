@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -38,6 +39,14 @@ data class ScoreData(val total: Int = 0)
 
 data class AutocompleteTag(val id: Int, val name: String, val post_count: Int, val category: Int)
 
+data class MullvadRelay(
+    val hostname: String,
+    val country_code: String,
+    val active: Boolean,
+    val ipv4_addr_in: String,
+    val pubkey: String
+)
+
 interface E621ApiService {
     @GET("posts.json")
     suspend fun getPosts(@Query("tags") tags: String, @Query("limit") limit: Int = 20, @Query("page") page: Int = 1): E621Response
@@ -51,6 +60,18 @@ interface E621ApiService {
 
     @DELETE("favorites/{id}.json")
     suspend fun removeFavorite(@Path("id") postId: Int): Response<Unit>
+}
+
+interface MullvadApiService {
+    @FormUrlEncoded
+    @POST("wg/")
+    suspend fun registerKey(
+        @Field("account") account: String,
+        @Field("pubkey") pubKey: String
+    ): Response<ResponseBody>
+
+    @GET("www/relays/wireguard/")
+    suspend fun getRelays(): List<MullvadRelay>
 }
 
 object NetworkModule {
@@ -101,5 +122,18 @@ object NetworkModule {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(E621ApiService::class.java)
+    }
+}
+
+object MullvadNetwork {
+    private const val BASE_URL = "https://api.mullvad.net/"
+
+    val api: MullvadApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .client(OkHttpClient.Builder().build())
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(MullvadApiService::class.java)
     }
 }
