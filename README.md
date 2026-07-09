@@ -10,7 +10,7 @@
 
 **HIDEOUT**은 제약 없이 안전하게 e621을 탐색할 수 있도록 설계된 안드로이드 전용 클라이언트 앱입니다.
 
-Jetpack Compose 기반의 수려한 UI와 더불어, 강력한 **내장 VPN 터널링 기능(Mullvad & WireGuard)**과 **Cloudflare 403 캡차 우회 기능**을 앱 내부에 완벽하게 탑재하여 국가 차단 및 봇 방어막을 자체적으로 돌파합니다.
+Jetpack Compose 기반의 수려한 UI와 더불어, 강력한 **내장 VPN 터널링 기능(Mullvad & WireGuard)** 과 **Cloudflare 403 캡차 우회 기능**을 앱 내부에 완벽하게 탑재하여 국가 차단 및 봇 방어막을 자체적으로 돌파합니다.
 
 **HIDEOUT** is a dedicated Android client app designed to securely explore e621 without restrictions.
 
