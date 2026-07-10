@@ -136,7 +136,7 @@ interface AppStrings {
     val cancel: String
     val loginFailed: String
     val authFailed: String
-    val error403 : String
+    val error403: String
     val errorTooManyTags: String
     val error451: String
     fun networkError(msg: String): String
