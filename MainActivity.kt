@@ -79,7 +79,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import coil.ImageLoader
@@ -94,11 +93,10 @@ import com.wireguard.crypto.KeyPair
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.InputStream
+import java.util.Locale
 
 val NeonOrange = Color(0xFFFF6B00)
 val PortalGrey = Color(0xFF8A8A8A)
@@ -138,7 +136,7 @@ interface AppStrings {
     val cancel: String
     val loginFailed: String
     val authFailed: String
-    val error403: String
+    val error403 : String
     val errorTooManyTags: String
     val error451: String
     fun networkError(msg: String): String
@@ -212,6 +210,7 @@ interface AppStrings {
     val mullvadHint: String
     val connectLabel: String
     val loginFailedMullvad: String
+    val viewAllRelated: String
 }
 
 object KoStrings : AppStrings {
@@ -307,10 +306,11 @@ object KoStrings : AppStrings {
     override val mullvadHint = "Mullvad 16자리 계정 번호"
     override val connectLabel = "연결하기"
     override val loginFailedMullvad = "인증 실패: 번호나 기기 제한(5대)을 확인하세요."
+    override val viewAllRelated = "모든 연관 포스트 보기"
 }
 
 object EnStrings : AppStrings {
-    override val hideoutSetup = "HIDEOUT Setup"
+    override val hideoutSetup = "Hideout Setup"
     override val vpnWarning = "Due to South Korean legal regulations,\na VPN initial setup is required to access e621.\nIf using an external VPN, please tap 'Skip Setup'."
     override val selectConfig = "Select Config File"
     override val changeConfig = "Change Config File"
@@ -402,6 +402,7 @@ object EnStrings : AppStrings {
     override val mullvadHint = "Mullvad 16-digit Account Number"
     override val connectLabel = "Connect"
     override val loginFailedMullvad = "Auth failed: Check account or device limit (max 5)."
+    override val viewAllRelated = "View All Related Posts"
 }
 
 val LocalStrings = staticCompositionLocalOf<AppStrings> { KoStrings }
@@ -513,6 +514,14 @@ suspend fun autoConnectMullvad(
             return@withContext false
         }
     }
+}
+
+fun formatDuration(seconds: Double?): String {
+    if (seconds == null || seconds <= 0) return ""
+    val totalSeconds = seconds.toInt()
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    return String.format(Locale.US, "%d:%02d", m, s)
 }
 
 class MainActivity : ComponentActivity() {
@@ -1238,7 +1247,7 @@ fun GalleryScreen(
                     Image(painter = painterResource(id = R.drawable.ic_launcher2), contentDescription = strings.cdLogo, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("HIDEOUT", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp), color = NeonOrange)
-                    Text("Ver. 2026-07-09", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Ver. 2026-07-10", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1394,6 +1403,11 @@ fun GalleryScreen(
                                         AsyncImage(model = ImageRequest.Builder(context).data(imageUrl).crossfade(500).build(), contentDescription = "${strings.idLabel(post.id)}", modifier = Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
                                         Box(modifier = Modifier.align(Alignment.BottomStart).padding(6.dp).background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
                                             Text(post.file.ext.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        if ((post.file.ext == "webm" || post.file.ext == "mp4") && post.duration != null && post.duration > 0) {
+                                            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                                Text(formatDuration(post.duration), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                 }
@@ -1557,6 +1571,16 @@ fun DetailScreen(post: Post, isActivePage: Boolean, prefs: android.content.Share
                     Text(strings.scoreLabel(currentScore), style = MaterialTheme.typography.titleMedium, color = NeonOrange)
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+
+                post.getAllRelatedIdsQuery()?.let { query ->
+                    Button(
+                        onClick = { onTagClick(query) },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) { Text(strings.viewAllRelated, color = NeonOrange) }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 if (!post.description.isNullOrBlank()) {
                     Text(strings.descLabel, style = MaterialTheme.typography.titleSmall, color = NeonOrange)
                     Text(post.description, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.padding(vertical = 4.dp))
