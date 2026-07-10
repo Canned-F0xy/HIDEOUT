@@ -1,7 +1,5 @@
 package com.CannedF0xy.hideout
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -16,9 +14,6 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
-import java.net.InetSocketAddress
-import java.net.Proxy
-import java.net.URL
 import java.util.concurrent.TimeUnit
 
 data class E621Response(val posts: List<Post>)
@@ -30,8 +25,30 @@ data class Post(
     val score: ScoreData,
     val description: String?,
     val sources: List<String> = emptyList(),
-    val is_favorited: Boolean = false
+    val is_favorited: Boolean = false,
+    val relationships: RelationshipsData,
+    val duration: Double? = null
+) {
+    fun getAllRelatedIdsQuery(): String? {
+        val ids = mutableListOf<Int>()
+        relationships.parent_id?.let { ids.add(it) }
+        if (relationships.has_children && relationships.children.isNotEmpty()) {
+            ids.addAll(relationships.children)
+        }
+        if (relationships.parent_id == null && relationships.has_children) {
+            ids.add(id)
+        }
+        if (ids.isEmpty()) return null
+        return "id:" + ids.distinct().joinToString(",")
+    }
+}
+
+data class RelationshipsData(
+    val parent_id: Int?,
+    val has_children: Boolean,
+    val children: List<Int> = emptyList()
 )
+
 data class FileData(val url: String?, val ext: String)
 data class PreviewData(val url: String?)
 data class TagsData(val general: List<String> = emptyList(), val artist: List<String> = emptyList(), val character: List<String> = emptyList(), val copyright: List<String> = emptyList())
